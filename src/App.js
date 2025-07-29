@@ -16,7 +16,7 @@ import axios from 'axios'
 const API_BASE_URL =
     window.location.hostname === 'localhost'
         ? 'http://localhost:8000'
-        : 'http://192.168.0.103:8000'
+        : 'https://affiliate-backend-xkdy.onrender.com';
 const LINK_PREVIEW_API_KEY = '6284bd688383e4ea39a51d9147f2eea3'
 
 function cropImageToSquare(imageUrl) {
