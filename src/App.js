@@ -13,10 +13,7 @@ import {
 import SearchIcon from '@mui/icons-material/Search'
 import axios from 'axios'
 
-const API_BASE_URL =
-    window.location.hostname === 'localhost'
-        ? 'http://localhost:8000'
-        : 'https://affiliate-backend-xkdy.onrender.com';
+const API_BASE_URL = 'https://affiliate-backend-xkdy.onrender.com';
 const LINK_PREVIEW_API_KEY = '6284bd688383e4ea39a51d9147f2eea3'
 
 function cropImageToSquare(imageUrl) {
@@ -47,44 +44,59 @@ function App() {
 
     useEffect(() => {
         let isMounted = true
-        console.log('Fetching products from:', `${API_BASE_URL}/api/products`)
         axios.get(`${API_BASE_URL}/api/products`).then(async (response) => {
-            console.log('Raw response data:', response.data)
             if (isMounted) {
-                // Process and set products
-                const initialProducts = response.data.map((product) => ({
-                    ...product,
-                    photo:
-                        product.photo_url ||
-                        'https://via.placeholder.com/400x200?text=No+Image',
-                }))
+                // Set products with placeholder if no photo
+                const initialProducts = response.data.map((product) => {
+                    let photoUrl = product.photo
+                    if (photoUrl && !/^https?:\/\//i.test(photoUrl)) {
+                        photoUrl = `${API_BASE_URL}${photoUrl}`
+                    }
+                    return {
+                        ...product,
+                        photo:
+                            photoUrl ||
+                            'https://via.placeholder.com/400x200?text=No+Image',
+                    }
+                })
                 // Sort by created_at descending (latest first)
                 initialProducts.sort(
                     (a, b) => new Date(b.created_at) - new Date(a.created_at)
                 )
+                setProducts(initialProducts)
 
-                // Process images for square display
-                const processedProducts = await Promise.all(
-                    initialProducts.map(async (product) => {
+                // Fetch and crop preview images for products with no real photo
+                await Promise.all(
+                    initialProducts.map(async (product, idx) => {
                         if (
-                            product.photo &&
-                            !product.photo.includes('placeholder')
+                            !product.photo ||
+                            product.photo.includes('placeholder')
                         ) {
                             try {
-                                const cropped = await cropImageToSquare(
-                                    product.photo
+                                const previewRes = await axios.get(
+                                    `https://api.linkpreview.net/?key=${LINK_PREVIEW_API_KEY}&q=${encodeURIComponent(
+                                        product.link
+                                    )}`
                                 )
-                                return { ...product, photo: cropped }
+                                if (previewRes.data?.image) {
+                                    const cropped = await cropImageToSquare(
+                                        previewRes.data.image
+                                    )
+                                    setProducts((prev) => {
+                                        const updated = [...prev]
+                                        updated[idx] = {
+                                            ...updated[idx],
+                                            photo: cropped,
+                                        }
+                                        return updated
+                                    })
+                                }
                             } catch (e) {
-                                console.error('Error processing image:', e)
-                                return product
+                                // Ignore errors, fallback to placeholder
                             }
                         }
-                        return product
                     })
                 )
-
-                setProducts(processedProducts)
             }
         })
         return () => {
@@ -181,28 +193,9 @@ function App() {
                                     image={product.photo}
                                     alt={product.title}
                                     loading="lazy"
-                                    onLoad={(e) => {
-                                        console.log(
-                                            'Image loaded successfully:',
-                                            product.title
-                                        )
-                                        handleImageLoad(product.id)
-                                    }}
-                                    onError={(e) => {
-                                        console.error(
-                                            'Image failed to load:',
-                                            product.title,
-                                            product.photo
-                                        )
-                                        e.target.src =
-                                            'https://via.placeholder.com/400x200?text=No+Image'
-                                        handleImageError(product.id)
-                                    }}
-                                    style={{
-                                        objectFit: 'contain',
-                                        width: '100%',
-                                        height: '100%',
-                                    }}
+                                    onLoad={() => handleImageLoad(product.id)}
+                                    onError={() => handleImageError(product.id)}
+                                    style={{}}
                                 />
                             </Box>
                         </Box>
